@@ -1,0 +1,57 @@
+name: flutter_application_1
+description: "A health monitoring application"
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.8.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  firebase_core: ^2.27.1  # Firebase Core functionality
+  firebase_auth: ^4.17.9  # For Firebase Authentication
+  cloud_firestore: ^4.15.9  # For Firebase Cloud Firestore
+  firebase_storage: ^11.6.10  # For Firebase Storage
+  firebase_analytics: ^10.8.9  # For Firebase Analytics
+  provider: ^6.1.1  # For state management
+  uuid: ^4.3.3  # For generating unique IDs
+  shared_preferences: ^2.2.2  # For local storage
+  fl_chart: ^0.66.2  # For health data visualization
+  intl: ^0.19.0  # For date formatting
+  sqflite: ^2.3.2  # For local database
+  path: ^1.8.3  # For database path
+  font_awesome_flutter: ^10.7.0  # For icons
+  google_fonts: ^6.1.0  # For easy access to Google Fonts
+  http: ^1.2.0  # For API calls
+  permission_handler: ^11.3.0  # For handling permissions
+  sensors_plus: ^4.0.2  # For accessing device sensors
+  health: ^13.1.1  # For accessing health data
+  flutter_local_notifications: ^17.0.0  # Upgraded to fix Android build ambiguity bug
+  country_picker: ^2.0.25  # For country selection
+  shimmer: ^3.0.0  # For loading effects
+  cached_network_image: ^3.3.1  # For efficient image loading
+  lottie: ^3.1.0  # For animations
+  flutter_animate: ^4.5.0  # For easy animations
+  glassmorphism: ^3.0.0  # For glass effect
+  flutter_svg: ^2.0.10+1  # For SVG support
+  syncfusion_flutter_charts: ^24.2.9  # For advanced charts
+  flutter_screenutil: ^5.9.0  # For responsive UI
+  animations: ^2.0.11  # For pre-built animations
+  email_validator: ^2.1.17  # For email validation
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0        # already there – keep if present
+
+  # ↓ add these two
+  build_runner: ^2.4.6
+  json_serializable: ^6.7.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/fonts/
+    - assets/animations/

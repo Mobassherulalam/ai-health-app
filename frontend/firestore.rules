@@ -1,0 +1,155 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper role/participant checks
+    function isSignedIn() { return request.auth != null; }
+    function isDoctor(uid) {
+      return exists(/databases/$(database)/documents/doctors/$(uid));
+    }
+    function isPatient(uid) {
+      return exists(/databases/$(database)/documents/patients/$(uid));
+    }
+
+    // Users: user can read/write own doc
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Patients: patient self full access; doctor read (tighten to assigned if desired)
+    match /patients/{patientId} {
+      allow read, write: if isSignedIn() && request.auth.uid == patientId;
+
+      // Current: any authenticated doctor may read patient
+      allow read: if isSignedIn() && isDoctor(request.auth.uid);
+
+      // OPTIONAL stricter (replace line above):
+      // allow read: if isSignedIn() && isDoctor(request.auth.uid)
+      //             && resource.data.assignedDoctorId == request.auth.uid;
+    }
+
+    // Doctors: public readable list; doctor writes own doc
+    match /doctors/{doctorId} {
+      allow read: if true;
+      allow write: if isSignedIn() && request.auth.uid == doctorId;
+    }
+
+    // Health data (broad; refine if needed)
+    match /health_data/{doc=**} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Alerts
+    match /alerts/{doc=**} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Chat threads: /chat_threads/{threadId} where threadId = doctorId_patientId
+    match /chat_threads/{threadId} {
+      function parts() { return threadId.split('_'); }
+      function doctorId() { return parts()[0]; }
+      function patientId() { return parts()[1]; }
+      function isParticipant() {
+        return isSignedIn() &&
+               (request.auth.uid == doctorId() || request.auth.uid == patientId());
+      }
+      function baseThreadKeys() {
+        return request.resource.data.keys().hasOnly([
+          'doctorId','patientId','lastMessage','lastSenderRole',
+          'updatedAt','unreadForDoctor','unreadForPatient'
+        ]);
+      }
+      function threadIdsConsistent() {
+        return request.resource.data.doctorId == doctorId() &&
+               request.resource.data.patientId == patientId();
+      }
+      function partiesExist() {
+        return isDoctor(doctorId()) && isPatient(patientId());
+      }
+      function lastMessageSizeOk() {
+        // Allow empty lastMessage on read counters update, or 1..1000 chars if present
+        return !('lastMessage' in request.resource.data)
+               || (request.resource.data.lastMessage is string
+                   && request.resource.data.lastMessage.size() <= 1000);
+      }
+
+  // Allow listing for any signed-in user so empty queries or doc ID inference don't 403.
+  // Per-document access (get) still restricted to participants.
+  allow list: if isSignedIn();
+  allow get: if isParticipant();
+
+      // Create thread (first message usually triggers)
+      allow create: if isParticipant()
+                    && partiesExist()
+                    && baseThreadKeys()
+                    && threadIdsConsistent()
+                    && lastMessageSizeOk();
+
+      // Update limited fields; IDs immutable; no extra keys
+      allow update: if isParticipant()
+                    && baseThreadKeys()
+                    && threadIdsConsistent()
+                    && request.resource.data.doctorId == resource.data.doctorId
+                    && request.resource.data.patientId == resource.data.patientId
+                    && lastMessageSizeOk();
+
+      // No delete (retain audit/history)
+      allow delete: if false;
+
+      // Messages subcollection
+      match /messages/{messageId} {
+        function baseFieldsOk() {
+          return request.resource.data.keys().hasOnly([
+            'doctorId','patientId','senderId','senderRole',
+            'text','timestamp','read'
+          ]);
+        }
+        function idsMatchThread() {
+          return request.resource.data.doctorId == doctorId() &&
+                 request.resource.data.patientId == patientId();
+        }
+        function validSender() {
+          return (request.resource.data.senderRole == 'doctor' &&
+                  request.resource.data.senderId == doctorId() &&
+                  isDoctor(doctorId())) ||
+                 (request.resource.data.senderRole == 'patient' &&
+                  request.resource.data.senderId == patientId() &&
+                  isPatient(patientId()));
+        }
+        function participant() {
+          return isSignedIn() &&
+                 (request.auth.uid == doctorId() || request.auth.uid == patientId());
+        }
+        function textSizeOk() {
+          return request.resource.data.text is string
+                 && request.resource.data.text.size() > 0
+                 && request.resource.data.text.size() <= 2000;
+        }
+
+  // Allow list for signed-in (so thread loads even before messages); per-doc get limited to participants
+  allow list: if isSignedIn();
+  allow get: if participant();
+
+        // Create: participant sending valid payload
+        allow create: if participant()
+                      && baseFieldsOk()
+                      && idsMatchThread()
+                      && validSender()
+                      && textSizeOk();
+
+        // Update: only allow marking read (other fields unchanged)
+        allow update: if participant()
+                      && baseFieldsOk()
+                      && idsMatchThread()
+                      && request.resource.data.senderId == resource.data.senderId
+                      && request.resource.data.senderRole == resource.data.senderRole
+                      && request.resource.data.text == resource.data.text
+                      && request.resource.data.timestamp == resource.data.timestamp
+                      && textSizeOk();
+
+        // No delete
+        allow delete: if false;
+      }
+    }
+  }
+}
